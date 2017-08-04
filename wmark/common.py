@@ -7,48 +7,10 @@ import string
 import os
 import re
 
+from .markers import marker_by_type
+
 SEPARATOR_CSV=';'
 
-def generate_random_int_markers(users, max_num=1e7, min_num=0):
-    "Генерирование неповторяющихся числовых маркеров для списка пользователей"
-    user_markers = {}
-    m = -1
-    marker_generates = [m, ]
-    
-    for us in users:
-        while m in marker_generates:
-            m = random.randint(min_num, max_num)
-        user_markers[us] = m
-        marker_generates.append(m)
-    return user_markers
-
-def generate_random_str_markers(users, max_len=6, min_len=None, lowercase=False, digits=True, special_chars=''):
-    if not min_len:
-        min_len = max_len
-    if min_len == max_len:
-        marker_len = max_len
-    else:
-        marker_len = random.randint(min_len, max_len)
-
-    tmpl_str = '' #строка с используемыми символами
-    if lowercase: tmpl_str += string.ascii_lowercase
-    else: tmpl_str += string.ascii_letters
-    if digits: tmpl_str += string.digits
-    if special_chars: tmpl_str += special_chars
-    tmpl_len = len(tmpl_str)
-
-        
-    user_markers = {}
-    m = ''
-    marker_generates = [m, ]
-    
-    for us in users:
-        while m in marker_generates:
-            m = ''.join([ tmpl_str[random.randint(0, tmpl_len-1)] for _ in xrange(marker_len) ])
-        user_markers[us] = m
-        marker_generates.append(m)
-    return user_markers
-    
 
 class User(object):
     def __init__(self, name, user_id, **params):
@@ -63,14 +25,20 @@ class Job(object):
     def __init__(self, name='', filename=None, marker_params=None):
         self.name = name
         self.users = {}
-        self.markers = {}
+        self.marker = None
+
+    #TODO: заглушка
+    @property
+    def markers(self):
+        return self.marker.markers
         
     def generate_markers(self, typ='int', length=6, **params):
-        users_id = self.users.keys()
         if typ == 'str':
-            self.markers = generate_random_str_markers(users_id, max_len=length, **params)
+            self.marker = marker_by_type['random_str'](max_len=length, **params)
         else:
-            self.markers = generate_random_int_markers(users_id, 10**length-1, 0)
+            self.marker = marker_by_type['random_int'](10**length-1, 0)
+        print self.users
+        self.marker.generate(self.users.values())
 
     def get_marker_for_user(self, user):
         return self.markers[user.id]
@@ -113,6 +81,8 @@ class App(object):
                     self.users[us.id] = us
 
     def import_jobs(self, filename):
+        return '' #TODO:
+        #simplejson.loads(re.sub('//.*$', '', open('zz/params.json' ,'rt').read(), flags=re.M))
         if not os.path.isfile(filename):
             return False
         with open(filename, 'rt') as inf:
@@ -147,16 +117,3 @@ class App(object):
                 s += SEPARATOR_CSV.join([ str(self.jobs[j].markers[us.id]) for j in job_names ])
                 outf.write(s+'\n')
 
-def write_mutate_file(infile, outfile, data={}):
-    re_key = re.compile('\$\{(.*?)\}')
-    
-    with codecs.open(infile, 'rt', encoding='utf8') as inf:
-        with codecs.open(outfile, 'wt', encoding='utf8') as outf:
-            for inline in inf:
-                ret = re_key.search(inline)
-                if ret:
-                    for (k,v) in data.items():
-                        kt = '${%s}' % (k,)
-                        inline = inline.replace(kt, str(v))
-                outf.write(inline)
-    return False
