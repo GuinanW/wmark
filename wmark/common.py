@@ -84,11 +84,13 @@ class Job(object):
 
 
 class App(object):
-    def __init__(self):
+    def __init__(self, filename_params=None):
         self.jobs = {}
         self.users = {}
         self.writer = None
         self.params = {}
+        if filename_params:
+            self.load(filename_params)
 
     def get_job(self, jobname):
         return self.jobs.get(jobname, None)
@@ -110,7 +112,6 @@ class App(object):
         if 'format' in params and params['format'] in writer_by_format:
             self.writer = writer_by_format[params['format']](params.get('infile'), self)
 
-        jobs = []
         for j in params.get('jobs', {}):
             for f in j.get('files', ['', ]):
                 if 'name' in j:
@@ -118,10 +119,11 @@ class App(object):
                 else:
                     jobname = '%s_%s_%s' % (j.get('encode', 'unk'), j.get('marker', {}).get('type', 'unk'), f)
                 f = os.path.join( params.get('template_dir', ''), f )
-                jobs.append( Job(jobname, f, j) )
+                self.set_job( Job(jobname, f, j) )
 
-        for job in jobs:
-            self.set_job(job)
+        self.import_markers(self.params.get('markers', '_markers.csv'))
+
+        for job in self.jobs.values():            
             job.generate_markers()
         self.params = params
 
@@ -137,43 +139,42 @@ class App(object):
                     us = User(**data)
                     self.users[us.id] = us
 
-    def import_jobs(self, filename):
-        return '' #TODO:
-
+    def import_markers(self, filename):
         if not os.path.isfile(filename):
             return False
         with open(filename, 'rt') as inf:
             headers = inf.readline().strip().split(SEPARATOR_CSV)
             job_names = []
-            for h in headers:
-                if h not in ('user_id', 'name'):
-                    job_names.append(h)
-                    j = Job(h)
-                    self.set_job(j)
-
             for line in inf:
-                data = dict(zip(headers, line.strip().split(SEPARATOR_CSV)))
-                if 'name' in data and 'user_id' in data:
-                    us = User(**data)
-                    self.users[us.id] = us
-                for j in job_names:
-                    self.jobs[j].users[us.id] = self.users[us.id]
-                    self.jobs[j].markers[us.id] = data[j]
-        print self.jobs
+                data = dict(zip(headers, 
+                            [ s.strip('"') for s in line.strip().split(SEPARATOR_CSV)
+                        ]))
+                if 'user_id' not in data or data['user_id'] not in self.users:
+                    continue
+                
+                user = self.users[data['user_id']]
+
+                for (jobname, job) in self.jobs.items():
+                    if jobname in data:
+                        try: 
+                            value = job.marker.convert_from_string(data[jobname])
+                            job.marker.set_user(user, value, True)
+                        except: pass
 
     def export_jobs(self, filename):
         job_names = sorted([ x for x in self.jobs.keys() if x in self.jobs ])
         headers = ['name', 'user_id'] + job_names
 
-#        with codecs.open(filename, 'wt', encoding='utf8') as outf:
         with open(filename, 'wt') as outf:
             outf.write(SEPARATOR_CSV.join(headers)+'\n')
             for user_name in sorted(self.users.keys()):
                 us = self.users[user_name]
-                s = '%s%s%s%s' % (us.name, SEPARATOR_CSV, us.id, SEPARATOR_CSV)
-                s += SEPARATOR_CSV.join([ str(self.jobs[j].markers[us.id]) for j in job_names ])
+                s = '"%s"%s"%s"%s' % (us.name, SEPARATOR_CSV, us.id, SEPARATOR_CSV)
+                s += SEPARATOR_CSV.join([ '"%s"' % (self.jobs[j].get_marker_for_user(us), ) for j in job_names ])
                 outf.write(s+'\n')
 
     def run(self):
         if self.writer:
             self.writer.write()
+        self.export_jobs(self.params.get('markers', '_markers.csv'))
+        

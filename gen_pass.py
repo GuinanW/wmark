@@ -10,6 +10,5 @@ if __name__ == '__main__':
         files = ['params.json', ]
 
     for f in files:
-        app = App()
-        app.load(f)
+        app = App(f)
         app.run()
