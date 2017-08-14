@@ -56,15 +56,24 @@ class WriterPdf(Writer):
             mbox = tuple(float(x) for x in page.MediaBox)
             page_x, page_y, page_x1, page_y1 = mbox
             #print page_x, page_y, page_x1, page_y1, wmark.h, wmark.w
-            #TODO: position
 
-            #wmark.scale(0.02)
-            if visibility:
-                wmark.y = int(page_y + wmark.h + 40)
-                wmark.x = int(page_x1 - wmark.w - 40)
+            if 'position' in job.encoder.params:
+                position = job.encoder.params['position']
+                if len(position) == 2:
+                    x, y = position
+                elif len(position) == 4:
+                    x = random.randint(position[0], position[1])
+                    y = random.randint(position[2], position[3])
+
+                wmark.x = min(x, int(page_x1 - wmark.w) )
+                wmark.y = min(y, int(page_y + wmark.h))
             else:
-                wmark.y = random.randint(int(page_y), int(page_y1 - wmark.h)) + 40
-                wmark.x = random.randint(int(page_x), int(page_x1 - wmark.w)) + 40
+                if visibility:
+                    wmark.x = int(page_x1 - wmark.w - 40)
+                    wmark.y = int(page_y + wmark.h + 40)
+                else:
+                    wmark.x = random.randint(int(page_x), int(page_x1 - wmark.w)) + 40
+                    wmark.y = random.randint(int(page_y), int(page_y1 - wmark.h)) + 40
 
             PageMerge(page).add(wmark, prepend=not visibility).render()
 

@@ -61,15 +61,25 @@ class EncoderImage(Encoder):
             'font': {'name': 'Nimbus-Mono-L', 'size': 8, 'color': '#000000'},
 
             'text': '${marker_id}',
-            'position': (300, 300),
+            'position': (0, 0),
             'visible': True,
         }
+
+    def calc_position(self, position):
+        if len(position) == 2:
+            return position
+        elif len(position) == 4:
+            return (
+                random.randint(position[0], position[1]), 
+                random.randint(position[2], position[3])
+            )
 
     def encode(self, outfile, data={}, infile=''):
         text = replace_markers_in_text(self.params['text'], data)
         if self.params['visible']: #картинка в размер текста
             cmd = """convert %s -background white -fill '%s' -font '%s' \
                         -pointsize %i label:'%s' '%s' """ % (
+                        self.job.filename,
                         self.params['font']['color'],
                         self.params['font']['name'],
                         self.params['font']['size'],
@@ -93,12 +103,14 @@ class EncoderDjvuColor(EncoderImage):
     def encode(self, outfile, data={}):
         text = replace_markers_in_text(self.params['text'], data)
         tmp_filename = '/tmp/%s_%s.ppm' % (data['user_id'], self.job.name)
+        x, y = self.calc_position( self.params.get('position', (50,0)) )
         cmd = """convert %s -density 90 -fill '%s' -font '%s' \
-                    -pointsize %s -gravity SouthEast -draw "text 150,100 '%s'" '%s' """ % (
+                    -pointsize %s -gravity NorthWest -draw "text %i,%i '%s'" '%s' """ % (
                         self.job.filename,
                         self.params['font']['color'],
                         self.params['font']['name'],
                         self.params['font']['size'],
+                        x,y,
                         text,
                         tmp_filename)
         #-kerning 2.5
